@@ -1,0 +1,177 @@
+---
+title: "House_prices_pittsburgh"
+output: html_document
+date: "2025-03-17"
+---
+```{r}
+setwd('C:/Users/MaxBo/OneDrive/Documents/Class MQE/Evidence Based Analysis/House Prices')
+```
+
+```{r}
+avg_price_pittsburgh <- read.csv("avg_year_pittsburgh.csv")
+```
+
+```{r}
+# Load ggplot
+library(ggplot2)
+
+# Fit orthogonal polynomial regression
+model <- lm(Avg_Price ~ poly(Year, 2), data = avg_price_pittsburgh)
+summary(model)
+
+# Plot the data and the fitted curve
+ggplot(avg_price_pittsburgh, aes(x = Year, y = Avg_Price)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), color = "red") + 
+  labs(title = "Polynomial Fit of House Prices",
+       x = "Year",
+       y = "Average House Price") +
+  theme_minimal()
+
+
+```
+
+
+```{r}
+summary(model)
+```
+
+
+```{r}
+#See how regular quadratic regression performs
+quadratic <- lm(Avg_Price ~ Year + I(Year^2), data = avg_price_pittsburgh)
+summary(quadratic)
+```
+
+```{r}
+#Use orthogonal model to de-trend, first load in filtered price data
+
+sales <- read.csv("Sales_Pittsburgh.csv")
+```
+
+```{r}
+# Fit orthogonal polynomial regression
+model2 <- lm(PRICE ~ poly(YEAR, 2), data = sales)
+
+
+# Plot the data and the fitted curve
+ggplot(sales, aes(x = YEAR, y = PRICE)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), color = "red") +
+  ylim(0, 1000000)+
+  labs(title = "Polynomial Fit of House Prices Under 1,000,000 Dollars",
+       x = "Year",
+       y = "Average House Price") +
+  theme_minimal()
+
+```
+```{r}
+summary(model2)
+```
+
+
+```{r}
+#Predicted sale based off model
+
+sales$PREDICTED <- predict(model2, newdata = sales)
+```
+
+```{r}
+#Detrending by subtracting predicted from actual
+
+sales$DETRENDED <- sales$PRICE - sales$PREDICTED
+```
+
+```{r}
+#standardizing
+
+sales$STANDARDIZED <- scale(sales$DETRENDED)
+```
+
+```{r}
+#Output csv back to python for further cleaning
+
+write.csv(sales, file = "sales_standard_pittsburgh.csv", row.names = FALSE)
+```
+
+```{r}
+#Import clean housing characteristic data
+sales_standard3 <- read.csv("sales_standard3_pittsburgh.csv")
+```
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(lmtest)
+library(sandwich)
+
+```
+
+```{r}
+# Run the regression
+model3 <- lm(STANDARDIZED ~ LOTAREA + STORIES + YEARBLT + 
+            EXTERIORFINISH + BASEMENT + CONDITION + TOTALROOMS, data = sales_standard3)
+
+# Summary of the model
+summary(model3)
+
+```
+
+
+
+```{r}
+# Extract residuals (neighborhood effects)
+sales_standard3$neighborhood_effect <- residuals(model3)
+
+```
+
+```{r}
+# Aggregate by neighborhood
+neighborhood_summary <- sales_standard3 %>%
+  group_by(MUNIDESC_x) %>%
+  summarise(mean_residual = mean(neighborhood_effect, na.rm = TRUE),
+            median_residual = median(neighborhood_effect, na.rm = TRUE),
+            count = n()) %>%
+  arrange(desc(mean_residual))
+
+
+```
+
+```{r}
+# View the top and bottom neighborhoods
+head(neighborhood_summary)  
+tail(neighborhood_summary)  
+```
+
+
+```{r}
+sd_price <- sd(sales_standard3$PRICE , na.rm = TRUE)
+```
+
+```{r}
+neighborhood_summary <- neighborhood_summary %>%
+  mutate(price_impact = mean_residual * sd_price)
+
+# View the results
+head(neighborhood_summary)  # Most expensive
+tail(neighborhood_summary)  # Least expensive
+```
+
+```{r}
+#Homes in 14th Ward - PITTSBURGH (Squirrel Hill and Point Breeze) are priced on 
+#average about $137829.79 higher than the average house price in Pittsburgh
+# when adjusting for rising house prices and controlling for 
+#housing characteristics.
+
+
+#Homes in 13th Ward - PITTSBURGH (Homewood and East Hills) are priced on
+#average about $154559.29 lower than the average house price in Pittsburgh 
+# when adjusting for rising house prices and controlling for housing 
+#characteristics.
+
+#The difference in average house price between 14th Ward - PITTSBURGH
+#(Squirrel Hill and Point Breeze) and 13th Ward - PITTSBURGH 
+#(Homewood and East Hills) when controlling for rising prices and
+#household characteristics is $292389.10. 
+```
+
